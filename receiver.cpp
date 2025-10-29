@@ -18,25 +18,6 @@
 using namespace std;
 
 // ============================================================================
-// RECEIVER STATE MACHINE
-// ============================================================================
-
-enum ReceiverState {
-    RECEIVER_START,
-    WAIT_FILE_HDR,
-    CONNECTION_ESTABLISHED,
-    WAIT_BLAST,
-    BLAST_RECEIVED,
-    BUFFER_WRITE,
-    DISK_WRITE,
-    WAIT_IS_BLAST_OVER,
-    REC_MISS_CREATED,
-    REC_MISS_SENT,
-    LINGER,
-    RECEIVER_DISCONNECTED
-};
-
-// ============================================================================
 // RECEIVER CLASS
 // ============================================================================
 
@@ -57,7 +38,6 @@ private:
     vector<bool> received_records;       // Track which records received
     vector<vector<uint8_t>> record_buffer;  // Store received records
     
-    ReceiverState state;
     bool connection_active;
     
     // Send packet
@@ -201,13 +181,13 @@ private:
     
     // Write received file to disk
     bool write_file_to_disk() {
-        // Create timestamp string
+        // Create timestamp string in IST (UTC+5:30)
         auto now = chrono::system_clock::now();
         auto now_time_t = chrono::system_clock::to_time_t(now);
-        auto now_ms = chrono::duration_cast<chrono::milliseconds>(
-            now.time_since_epoch()) % 1000;
         
-        struct tm* timeinfo = localtime(&now_time_t);
+        // Convert to IST by adding 5 hours 30 minutes (19800 seconds)
+        now_time_t += 19800;
+        struct tm* timeinfo = gmtime(&now_time_t);  // Use gmtime since we already adjusted
         
         // Format: YYYYMMDD-H:MM-AM/PM (e.g., 20251029-9:50-PM)
         stringstream timestamp_ss;
@@ -262,7 +242,7 @@ private:
     }
 
 public:
-    FileReceiver(int p) : port(p), state(RECEIVER_START), connection_active(false) {
+    FileReceiver(int p) : port(p), connection_active(false) {
         // Create UDP socket
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
         if (sockfd < 0) {
@@ -291,15 +271,13 @@ public:
         uint8_t buffer[MAX_UDP_PAYLOAD];
         size_t size;
         
-        state = WAIT_FILE_HDR;
-        
         // Phase 1: Wait for FILE_HDR
-        while (state == WAIT_FILE_HDR) {
+        while (true) {
             if (recv_packet(buffer, size)) {
                 if (buffer[0] == FILE_HDR) {
                     process_file_hdr(buffer, size);
-                    state = CONNECTION_ESTABLISHED;
                     connection_active = true;
+                    break;
                 }
             }
         }
@@ -308,8 +286,6 @@ public:
         uint32_t expected_blast_start = 1;
         
         while (connection_active) {
-            state = WAIT_BLAST;
-            
             // Receive packets until IS_BLAST_OVER or DISCONNECT
             while (true) {
                 if (!recv_packet_timeout(buffer, size, 10)) {
@@ -322,7 +298,6 @@ public:
                     process_data_packet(buffer, size);
                 }
                 else if (type == IS_BLAST_OVER) {
-                    state = WAIT_IS_BLAST_OVER;
                     BlastOverPacket blast_over;
                     blast_over.deserialize(buffer);
                     
@@ -363,7 +338,6 @@ public:
         }
         
         // Phase 3: Linger
-        state = LINGER;
         cout << "\nEntering linger state for " << LINGER_TIME << " seconds..." << endl;
         
         auto linger_start = chrono::steady_clock::now();
@@ -384,8 +358,6 @@ public:
                 }
             }
         }
-        
-        state = RECEIVER_DISCONNECTED;
         
         // Write file to disk
         if (!write_file_to_disk()) {

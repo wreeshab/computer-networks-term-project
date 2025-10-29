@@ -16,27 +16,6 @@
 using namespace std;
 
 // ============================================================================
-// SENDER STATE MACHINE
-// ============================================================================
-
-enum SenderState {
-    SENDER_START,
-    DISK_ACCESS,
-    FILE_ACCESS,
-    FILE_HDR_CREATED,
-    WAIT_1,
-    CONNECTION_ESTABLISHED,
-    BUFFER_WRITE,
-    PACKETS_CREATED,
-    BLAST_SENT,
-    IS_BLAST_OVER_SENT,
-    WAIT_2,
-    REC_MISS_RECEIVED,
-    MISSING_RECORDS_SENT,
-    DISCONNECTED
-};
-
-// ============================================================================
 // SENDER CLASS
 // ============================================================================
 
@@ -55,7 +34,6 @@ private:
     vector<vector<uint8_t>> file_records;  // all file records in memory
     
     Statistics stats;
-    SenderState state;
     
     // Garbler: simulate packet loss
     bool should_drop_packet() {
@@ -301,7 +279,7 @@ public:
     FileSender(const string& ip, int port, const string& fname, const string& output_fname,
                uint16_t rec_size, uint32_t b_size, double loss) 
         : filename(fname), output_filename(output_fname), record_size(rec_size), 
-          blast_size(b_size), loss_rate(loss), state(SENDER_START) {
+          blast_size(b_size), loss_rate(loss) {
         
         // Create UDP socket
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -332,13 +310,8 @@ public:
         cout << "Loss rate: " << (loss_rate * 100) << "%" << endl;
         
         // Phase 1: Connection Setup
-        state = DISK_ACCESS;
         if (!load_file()) return false;
-        
-        state = FILE_HDR_CREATED;
         if (!send_file_header()) return false;
-        
-        state = CONNECTION_ESTABLISHED;
         
         // Phase 2: Data Transfer
         uint32_t current_rec = 1;
@@ -354,7 +327,6 @@ public:
         
         // Phase 3: Disconnect
         send_disconnect();
-        state = DISCONNECTED;
         
         auto end_time = chrono::high_resolution_clock::now();
         chrono::duration<double> elapsed = end_time - start_time;
