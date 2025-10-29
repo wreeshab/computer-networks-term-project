@@ -1,0 +1,43 @@
+# Compiled executables
+sender
+receiver
+
+# Object files
+*.o
+*.obj
+
+# Test files
+test_*.txt
+test_*.bin
+original.txt
+*_backup.txt
+*_original.txt
+
+# Received files directory
+received_files/
+
+# Log files
+*.log
+sender_output.log
+receiver_output.log
+
+# Core dumps
+core
+core.*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.a
+*.so
+*.dylib
+
+# Temporary files
+*.tmp
+temp_*
